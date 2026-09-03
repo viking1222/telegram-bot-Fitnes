@@ -387,6 +387,7 @@ def main():
     global app
     
     app = Application.builder().token(TELEGRAM_TOKEN).build()
+await app.initialize()
     
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
