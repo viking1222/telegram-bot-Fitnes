@@ -1,0 +1,4 @@
+Flask==2.3.3
+python-telegram-bot==20.7
+openai==1.30.0
+schedule==1.2.0
