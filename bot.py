@@ -140,7 +140,6 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ========== ОБРАБОТКА ВЕСА ==========
 async def handle_weight_command(text, update):
-    chat_id = update.effective_chat.id
     response = ""
     
     if "записать вес" in text:
