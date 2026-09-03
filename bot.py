@@ -384,16 +384,16 @@ def run_scheduler():
 
 # ========== ЗАПУСК ==========
 def main():
-    global app
-    
+    # Создаём приложение
     app = Application.builder().token(TELEGRAM_TOKEN).build()
-await app.initialize()
     
+    # Добавляем обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
+    # Запускаем планировщик
     import schedule
     schedule.every().day.at("09:00").do(lambda: asyncio.run(send_daily_report()))
     
