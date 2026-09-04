@@ -47,45 +47,32 @@ food_storage = Storage("food_data.json", {
 
 active_chats = []
 
-# ========== НАСТРОЙКИ AI ==========
-SYSTEM_PROMPT = """Ты — дружелюбный фитнес-помощник. Помогаешь с питанием, тренировками, задачами и весом.
-
-ПРАВИЛА ОТВЕТОВ:
-- Отвечай как живой собеседник, без излишней формальности
-- НЕ используй звёздочки (*) и другие символы для форматирования
-- Используй эмодзи УМЕРЕННО: 1-2 эмодзи на смысловой блок
-- Структурируй ответ с помощью переносов строк и списков через дефисы (-)
-- Будь полезным, мотивирующим, но не перегружай эмодзи
-- Эмодзи ставь ТОЛЬКО перед ключевыми пунктами"""
-
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ========== ОЧИСТКА ТЕКСТА ОТ ЗВЁЗДОЧЕК ==========
+# ========== ОЧИСТКА ТЕКСТА ==========
 def clean_text(text):
-    """Убирает звёздочки и другие маркеры форматирования из текста"""
-    # Убираем **жирный** и *курсив*
     text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
     text = re.sub(r'\*(.+?)\*', r'\1', text)
-    # Убираем обратные кавычки
     text = re.sub(r'`(.+?)`', r'\1', text)
-    # Убираем лишние подчёркивания
     text = re.sub(r'__(.+?)__', r'\1', text)
     return text
 
-# ========== ФУНКЦИЯ ДЛЯ AI ==========
+# ========== ФУНКЦИЯ ДЛЯ AI (только для советов) ==========
 def get_ai_response(user_message):
     try:
         response = client.chat.completions.create(
             model="deepseek/deepseek-v4-pro",
             messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "system", "content": """Ты — фитнес-помощник. Давай короткие, полезные советы по питанию, тренировкам и мотивации. 
+                Отвечай кратко, по делу, без лишней воды. Используй эмодзи умеренно.
+                НЕ придумывай данные за пользователя — ты не знаешь его вес, тренировки и задачи.
+                Если спрашивают про конкретные данные — скажи, что нужно их записать через команды."""},
                 {"role": "user", "content": user_message}
             ],
             temperature=0.7,
-            max_tokens=1000,
+            max_tokens=800,
         )
-        # Очищаем ответ от звёздочек
         return clean_text(response.choices[0].message.content)
     except Exception as e:
         logger.error(f"Ошибка AI: {e}")
@@ -106,37 +93,38 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     reply_markup = InlineKeyboardMarkup(keyboard)
     
     await update.message.reply_text(
-        "👋 Привет! Я твой AI-помощник по фитнесу и работе.\n\n"
-        "📌 Нажми на кнопку или напиши команду:",
+        "👋 Привет! Я твой помощник по фитнесу и работе.\n\n"
+        "📌 Я сохраняю твои данные и даю советы.\n"
+        "🔹 Нажми на кнопку или напиши команду:",
         reply_markup=reply_markup
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
     help_text = """
-📚 ДОСТУПНЫЕ КОМАНДЫ:
+📚 КОМАНДЫ:
 
 🍽️ ПИТАНИЕ:
-  «еда показать» — текущий рацион
-  «еда добавить 16:00 перекус творог 200г»
-  «еда удалить 21:00»
+  «еда показать» — показать рацион на сегодня
+  «еда добавить 16:00 перекус творог 200г» — добавить приём
+  «еда удалить 21:00» — удалить приём
 
 🏋️ ТРЕНИРОВКИ:
   «тренировка план» — план на сегодня
-  «тренировка прогресс жим» — прогресс
-  «тренировка логируй жим 60кг 4х10»
+  «тренировка логируй жим 60кг 4х10» — записать подход
+  «тренировка прогресс жим» — прогресс по упражнению
 
-💼 РАБОТА:
-  «добавить задачу сделать отчёт»
+💼 ЗАДАЧИ:
+  «добавить задачу сделать отчёт» — добавить задачу
   «мои задачи» — список задач
-  «завершить задачу 1» — завершить по номеру
+  «завершить задачу 1» — отметить выполненной
 
 ⚖️ ВЕС:
-  «записать вес 76.5 кг»
-  «прогресс веса» — шкала прогресса
-  «установить цель 85 кг»
+  «записать вес 76.5 кг» — записать вес
+  «прогресс веса» — график прогресса
+  «установить цель 85 кг» — установить цель
 
 📅 ОБЩЕЕ:
-  «сегодня» — полный план дня
+  «сегодня» — полный план дня из сохранённых данных
   «помощь» — это сообщение
     """
     await update.message.reply_text(help_text)
@@ -156,8 +144,117 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     }
     
     command = commands.get(query.data, "помощь")
-    response = get_ai_response(command)
-    await query.edit_message_text(text=response)
+    
+    # Обрабатываем команды без AI
+    if command == "сегодня":
+        await show_today(update)
+        return
+    elif command == "еда показать":
+        await handle_food_command("еда показать", update)
+        return
+    elif command == "тренировка план":
+        await handle_workout_command("тренировка план", update)
+        return
+    elif command == "мои задачи":
+        await handle_task_command("мои задачи", update)
+        return
+    elif command == "прогресс веса":
+        await handle_weight_command("прогресс веса", update)
+        return
+    elif command == "полный прогресс":
+        await show_full_progress(update)
+        return
+    else:
+        response = get_ai_response(command)
+        await query.edit_message_text(text=response)
+
+# ========== ПОКАЗАТЬ ПОЛНЫЙ ПЛАН НА СЕГОДНЯ ==========
+async def show_today(update):
+    today = datetime.now().date()
+    today_name = datetime.now().strftime("%A").lower()
+    day_type = "training" if today_name in ["monday", "wednesday", "friday"] else "rest"
+    
+    # Еда
+    meals = food_storage.get(day_type, [])
+    food_text = ""
+    for meal in meals:
+        food_text += f"⏰ {meal['time']} — {meal['meal']}\n   📦 {meal['foods']}\n"
+    if not food_text:
+        food_text = "📭 Нет запланированных приёмов пищи"
+    
+    # Тренировка
+    templates = workout_storage.get("templates", {})
+    plan = templates.get(today_name, ["Нет тренировки на сегодня"])
+    workout_text = "\n".join([f"{i+1}. {ex}" for i, ex in enumerate(plan)])
+    
+    # Задачи
+    tasks = task_storage.get("tasks", [])
+    active_tasks = [t for t in tasks if not t["completed"]]
+    tasks_text = "\n".join([f"{i+1}. {t['text']}" for i, t in enumerate(active_tasks)]) if active_tasks else "🎉 Все задачи выполнены!"
+    
+    # Вес
+    history = weight_storage.get("history", [])
+    weight_text = f"{history[-1]['weight']} кг" if history else "Нет данных"
+    goal = weight_storage.get("goal", 85)
+    
+    response = f"""
+📅 СЕГОДНЯ ({today})
+
+🍽️ ПИТАНИЕ:
+{food_text}
+
+🏋️ ТРЕНИРОВКА:
+{workout_text}
+
+💼 ЗАДАЧИ:
+{tasks_text}
+
+⚖️ ВЕС:
+Текущий: {weight_text}
+Цель: {goal} кг
+"""
+    await update.message.reply_text(response)
+
+# ========== ПОЛНЫЙ ПРОГРЕСС ==========
+async def show_full_progress(update):
+    history = weight_storage.get("history", [])
+    tasks = task_storage.get("tasks", [])
+    workout_history = workout_storage.get("history", [])
+    
+    response = "📊 ПОЛНЫЙ ПРОГРЕСС\n\n"
+    
+    # Вес
+    if history:
+        current = history[-1]["weight"]
+        goal = weight_storage.get("goal", 85)
+        start = weight_storage.get("start_weight", 75)
+        progress = round((current - start) / (goal - start) * 100, 1) if goal != start else 0
+        bar = "█" * int(progress // 10) + "░" * (10 - int(progress // 10))
+        response += f"⚖️ ВЕС:\nТекущий: {current} кг\nЦель: {goal} кг\n[{bar}] {progress}%\n\n"
+    else:
+        response += "⚖️ ВЕС: Нет данных\n\n"
+    
+    # Задачи
+    active = [t for t in tasks if not t["completed"]]
+    done = [t for t in tasks if t["completed"]]
+    response += f"💼 ЗАДАЧИ:\nАктивных: {len(active)}\nВыполнено: {len(done)}\n\n"
+    
+    # Тренировки
+    if workout_history:
+        exercises = {}
+        for log in workout_history[-10:]:
+            ex = log["exercise"]
+            if ex not in exercises:
+                exercises[ex] = []
+            exercises[ex].append(log)
+        response += "🏋️ ПОСЛЕДНИЕ ТРЕНИРОВКИ:\n"
+        for ex, logs in list(exercises.items())[:3]:
+            last = logs[-1]
+            response += f"{ex}: {last['weight']}кг × {last['reps']} повторений\n"
+    else:
+        response += "🏋️ ТРЕНИРОВКИ: Нет данных"
+    
+    await update.message.reply_text(response)
 
 # ========== ОБРАБОТКА ВЕСА ==========
 async def handle_weight_command(text, update):
@@ -338,6 +435,11 @@ async def handle_workout_command(text, update):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.lower()
     
+    # Обработка команд без AI
+    if "сегодня" in text:
+        await show_today(update)
+        return
+    
     if any(word in text for word in ["вес", "кг", "цель"]) and ("записать" in text or "прогресс" in text or "установить" in text):
         await handle_weight_command(text, update)
         return
@@ -354,6 +456,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await handle_workout_command(text, update)
         return
     
+    # Всё остальное — AI даёт советы
     await context.bot.send_chat_action(update.effective_chat.id, action="typing")
     response = get_ai_response(text)
     await update.message.reply_text(response)
