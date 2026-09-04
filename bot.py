@@ -50,25 +50,28 @@ active_chats = []
 # ========== НАСТРОЙКИ AI ==========
 SYSTEM_PROMPT = """Ты — дружелюбный фитнес-помощник. Помогаешь с питанием, тренировками, задачами и весом.
 
-ПРАВИЛА ФОРМАТИРОВАНИЯ:
-- Заголовки: **жирный текст**
-- Акценты: *курсив*
-- Списки: используй дефисы (-) или цифры
-- Разделители: ---
-- Ответ должен быть структурированным, легко читаемым
-- ИСПОЛЬЗУЙ ЭМОДЗИ: 🏋️ 🍽️ 💼 ⚖️ 📊 📅 🎯 🔥 💪 😊 📋 ✅ ⚠️ 🎉 📈 📉 ⏰ 📦 📌
-- Эмодзи ставь перед заголовками и ключевыми пунктами
-- Делай ответы живыми и мотивирующими
-- НЕ используй символы ! . - ( ) [ ] { } + = | * _ # ` ~ > в обычном тексте без экранирования"""
+ПРАВИЛА ОТВЕТОВ:
+- Отвечай как живой собеседник, без излишней формальности
+- НЕ используй звёздочки (*) и другие символы для форматирования
+- Используй эмодзи УМЕРЕННО: 1-2 эмодзи на смысловой блок
+- Структурируй ответ с помощью переносов строк и списков через дефисы (-)
+- Будь полезным, мотивирующим, но не перегружай эмодзи
+- Эмодзи ставь ТОЛЬКО перед ключевыми пунктами"""
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
-# ========== ЭКРАНИРОВАНИЕ MARKDOWN ==========
-def escape_markdown(text):
-    """Экранирует все специальные символы для MarkdownV2"""
-    special_chars = r'([_*\[\]()~`>#+\-=|{}.!])'
-    return re.sub(special_chars, r'\\\1', text)
+# ========== ОЧИСТКА ТЕКСТА ОТ ЗВЁЗДОЧЕК ==========
+def clean_text(text):
+    """Убирает звёздочки и другие маркеры форматирования из текста"""
+    # Убираем **жирный** и *курсив*
+    text = re.sub(r'\*\*(.+?)\*\*', r'\1', text)
+    text = re.sub(r'\*(.+?)\*', r'\1', text)
+    # Убираем обратные кавычки
+    text = re.sub(r'`(.+?)`', r'\1', text)
+    # Убираем лишние подчёркивания
+    text = re.sub(r'__(.+?)__', r'\1', text)
+    return text
 
 # ========== ФУНКЦИЯ ДЛЯ AI ==========
 def get_ai_response(user_message):
@@ -79,10 +82,11 @@ def get_ai_response(user_message):
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_message}
             ],
-            temperature=0.6,
+            temperature=0.7,
             max_tokens=1000,
         )
-        return response.choices[0].message.content
+        # Очищаем ответ от звёздочек
+        return clean_text(response.choices[0].message.content)
     except Exception as e:
         logger.error(f"Ошибка AI: {e}")
         return "⚠️ Ошибка подключения к AI. Попробуй позже."
@@ -108,34 +112,34 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    help_text = escape_markdown("""
-📚 *ДОСТУПНЫЕ КОМАНДЫ:*
+    help_text = """
+📚 ДОСТУПНЫЕ КОМАНДЫ:
 
-🍽️ *ПИТАНИЕ:*
+🍽️ ПИТАНИЕ:
   «еда показать» — текущий рацион
   «еда добавить 16:00 перекус творог 200г»
   «еда удалить 21:00»
 
-🏋️ *ТРЕНИРОВКИ:*
+🏋️ ТРЕНИРОВКИ:
   «тренировка план» — план на сегодня
   «тренировка прогресс жим» — прогресс
   «тренировка логируй жим 60кг 4х10»
 
-💼 *РАБОТА:*
+💼 РАБОТА:
   «добавить задачу сделать отчёт»
   «мои задачи» — список задач
   «завершить задачу 1» — завершить по номеру
 
-⚖️ *ВЕС:*
+⚖️ ВЕС:
   «записать вес 76.5 кг»
   «прогресс веса» — шкала прогресса
   «установить цель 85 кг»
 
-📅 *ОБЩЕЕ:*
+📅 ОБЩЕЕ:
   «сегодня» — полный план дня
   «помощь» — это сообщение
-    """)
-    await update.message.reply_text(help_text, parse_mode="MarkdownV2")
+    """
+    await update.message.reply_text(help_text)
 
 async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
@@ -153,7 +157,7 @@ async def button_callback(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     command = commands.get(query.data, "помощь")
     response = get_ai_response(command)
-    await query.edit_message_text(text=escape_markdown(response), parse_mode="MarkdownV2")
+    await query.edit_message_text(text=response)
 
 # ========== ОБРАБОТКА ВЕСА ==========
 async def handle_weight_command(text, update):
@@ -163,38 +167,38 @@ async def handle_weight_command(text, update):
         try:
             weight = float(text.split("кг")[0].split()[-1])
             weight_storage.append_to_list("history", {"weight": weight, "date": str(datetime.now().date())})
-            response = f"✅ Вес {weight} кг записан\!"
+            response = f"✅ Вес {weight} кг записан!"
         except:
-            response = "❌ Неверный формат. Используй: *записать вес 76.5 кг*"
+            response = "❌ Неверный формат. Используй: записать вес 76.5 кг"
     
     elif "прогресс веса" in text:
         history = weight_storage.get("history", [])
         if not history:
-            response = "📭 Нет данных о весе. Запиши первый вес: *записать вес 75 кг*"
+            response = "📭 Нет данных о весе. Запиши первый вес: записать вес 75 кг"
         else:
             current = history[-1]["weight"]
             goal = weight_storage.get("goal", 85)
             start = weight_storage.get("start_weight", 75)
             progress = round((current - start) / (goal - start) * 100, 1)
             bar = "█" * int(progress // 10) + "░" * (10 - int(progress // 10))
-            response = f"⚖️ *Прогресс веса:*\nТекущий: *{current}* кг\nЦель: *{goal}* кг\n[{bar}] *{progress}%*\n"
+            response = f"⚖️ Прогресс веса:\nТекущий: {current} кг\nЦель: {goal} кг\n[{bar}] {progress}%\n"
             if current >= goal:
-                response += "🎉 Поздравляю\! Ты достиг цели\!"
+                response += "🎉 Поздравляю! Ты достиг цели!"
             else:
-                response += f"📉 Осталось: *{round(goal - current, 1)}* кг"
+                response += f"📉 Осталось: {round(goal - current, 1)} кг"
     
     elif "установить цель" in text:
         try:
             goal = float(text.split("кг")[0].split()[-1])
             weight_storage.set("goal", goal)
-            response = f"🎯 Новая цель: *{goal}* кг"
+            response = f"🎯 Новая цель: {goal} кг"
         except:
-            response = "❌ Неверный формат. Используй: *установить цель 85 кг*"
+            response = "❌ Неверный формат. Используй: установить цель 85 кг"
     
     else:
         response = "❌ Неизвестная команда по весу."
     
-    await update.message.reply_text(escape_markdown(response), parse_mode="MarkdownV2")
+    await update.message.reply_text(response)
 
 # ========== ОБРАБОТКА ЗАДАЧ ==========
 async def handle_task_command(text, update):
@@ -204,7 +208,7 @@ async def handle_task_command(text, update):
         task_text = text.replace("добавить задачу", "").strip()
         if task_text:
             task_storage.append_to_list("tasks", {"text": task_text, "completed": False})
-            response = f"✅ Задача добавлена: *{task_text}*"
+            response = f"✅ Задача добавлена: {task_text}"
         else:
             response = "❌ Укажи задачу."
     
@@ -212,11 +216,11 @@ async def handle_task_command(text, update):
         tasks = task_storage.get("tasks", [])
         active = [t for t in tasks if not t["completed"]]
         if not active:
-            response = "🎉 Все задачи выполнены\!"
+            response = "🎉 Все задачи выполнены!"
         else:
-            response = "📋 *Твои задачи:*\n"
+            response = "📋 Твои задачи:\n"
             for i, task in enumerate(active, 1):
-                response += f"{i}\\. {task['text']}\n"
+                response += f"{i}. {task['text']}\n"
     
     elif "завершить задачу" in text:
         try:
@@ -227,13 +231,13 @@ async def handle_task_command(text, update):
                 task = active[num]
                 task["completed"] = True
                 task_storage.save()
-                response = f"✅ Задача завершена: *{task['text']}*"
+                response = f"✅ Задача завершена: {task['text']}"
             else:
                 response = "❌ Неверный номер задачи"
         except:
-            response = "❌ Укажи номер задачи. Например: *завершить задачу 1*"
+            response = "❌ Укажи номер задачи. Например: завершить задачу 1"
     
-    await update.message.reply_text(escape_markdown(response), parse_mode="MarkdownV2")
+    await update.message.reply_text(response)
 
 # ========== ОБРАБОТКА ПИТАНИЯ ==========
 async def handle_food_command(text, update):
@@ -246,9 +250,9 @@ async def handle_food_command(text, update):
         if not meals:
             response = "📭 Нет запланированных приёмов пищи"
         else:
-            response = f"🍽️ *РАЦИОН НА СЕГОДНЯ* ({day_type}):\n\n"
+            response = f"🍽️ РАЦИОН НА СЕГОДНЯ ({day_type}):\n\n"
             for meal in meals:
-                response += f"⏰ *{meal['time']}* — {meal['meal']}\n   📦 {meal['foods']}\n\n"
+                response += f"⏰ {meal['time']} — {meal['meal']}\n   📦 {meal['foods']}\n\n"
     
     elif "еда добавить" in text:
         try:
@@ -259,9 +263,9 @@ async def handle_food_command(text, update):
             today = datetime.now().strftime("%A").lower()
             day_type = "training" if today in ["monday", "wednesday", "friday"] else "rest"
             food_storage.append_to_list(day_type, {"time": time, "meal": meal_name, "foods": foods})
-            response = f"✅ Добавлено: *{time}* — {meal_name}"
+            response = f"✅ Добавлено: {time} — {meal_name}"
         except:
-            response = "❌ Неверный формат. Используй: *еда добавить 16:00 перекус творог 200г*"
+            response = "❌ Неверный формат. Используй: еда добавить 16:00 перекус творог 200г"
     
     elif "еда удалить" in text:
         try:
@@ -272,16 +276,16 @@ async def handle_food_command(text, update):
             new_meals = [m for m in meals if m["time"] != time]
             if len(new_meals) < len(meals):
                 food_storage.set(day_type, new_meals)
-                response = f"✅ Удалён приём в *{time}*"
+                response = f"✅ Удалён приём в {time}"
             else:
-                response = f"❌ Приём в *{time}* не найден"
+                response = f"❌ Приём в {time} не найден"
         except:
-            response = "❌ Укажи время. Например: *еда удалить 21:00*"
+            response = "❌ Укажи время. Например: еда удалить 21:00"
     
     else:
         response = "❌ Неизвестная команда по питанию."
     
-    await update.message.reply_text(escape_markdown(response), parse_mode="MarkdownV2")
+    await update.message.reply_text(response)
 
 # ========== ОБРАБОТКА ТРЕНИРОВОК ==========
 async def handle_workout_command(text, update):
@@ -291,9 +295,9 @@ async def handle_workout_command(text, update):
         today = datetime.now().strftime("%A").lower()
         templates = workout_storage.get("templates", {})
         plan = templates.get(today, ["Нет тренировки на сегодня"])
-        response = f"🏋️ *ПЛАН ТРЕНИРОВКИ НА СЕГОДНЯ:*\n\n"
+        response = f"🏋️ ПЛАН ТРЕНИРОВКИ НА СЕГОДНЯ:\n\n"
         for i, ex in enumerate(plan, 1):
-            response += f"{i}\\. {ex}\n"
+            response += f"{i}. {ex}\n"
     
     elif "тренировка логируй" in text:
         try:
@@ -307,9 +311,9 @@ async def handle_workout_command(text, update):
                 "reps": reps,
                 "date": str(datetime.now().date())
             })
-            response = f"✅ Записано: *{exercise}* {weight}кг × *{reps}* повторений"
+            response = f"✅ Записано: {exercise} {weight}кг × {reps} повторений"
         except:
-            response = "❌ Неверный формат. Используй: *тренировка логируй жим 60кг 4х10*"
+            response = "❌ Неверный формат. Используй: тренировка логируй жим 60кг 4х10"
     
     elif "тренировка прогресс" in text:
         try:
@@ -317,18 +321,18 @@ async def handle_workout_command(text, update):
             history = workout_storage.get("history", [])
             logs = [h for h in history if h["exercise"] == exercise]
             if not logs:
-                response = f"📭 Нет данных по упражнению *{exercise}*"
+                response = f"📭 Нет данных по упражнению {exercise}"
             else:
-                response = f"📈 *ПРОГРЕСС:* {exercise}\n\n"
+                response = f"📈 ПРОГРЕСС: {exercise}\n\n"
                 for log in logs[-5:]:
-                    response += f"{log['date']}: *{log['weight']}*кг × *{log['reps']}* повторений\n"
+                    response += f"{log['date']}: {log['weight']}кг × {log['reps']} повторений\n"
         except:
-            response = "❌ Укажи упражнение. Например: *тренировка прогресс жим*"
+            response = "❌ Укажи упражнение. Например: тренировка прогресс жим"
     
     else:
         response = "❌ Неизвестная команда по тренировкам."
     
-    await update.message.reply_text(escape_markdown(response), parse_mode="MarkdownV2")
+    await update.message.reply_text(response)
 
 # ========== ГЛАВНЫЙ ОБРАБОТЧИК ==========
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -352,7 +356,7 @@ async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     
     await context.bot.send_chat_action(update.effective_chat.id, action="typing")
     response = get_ai_response(text)
-    await update.message.reply_text(escape_markdown(response), parse_mode="MarkdownV2")
+    await update.message.reply_text(response)
 
 # ========== ЕЖЕДНЕВНЫЙ ОТЧЁТ ==========
 async def send_daily_report():
@@ -361,28 +365,28 @@ async def send_daily_report():
             today = datetime.now().date()
             history = weight_storage.get("history", [])
             
-            report = f"📋 *ДОБРОЕ УТРО\! ОТЧЁТ ЗА {today}*\n\n"
+            report = f"📋 ДОБРОЕ УТРО! ОТЧЁТ ЗА {today}\n\n"
             
             if history:
                 last = history[-1]
-                report += f"⚖️ Вес: *{last['weight']}* кг\n"
+                report += f"⚖️ Вес: {last['weight']} кг\n"
                 
                 week_ago = today - timedelta(days=7)
                 week_data = [h for h in history if datetime.strptime(h['date'], '%Y-%m-%d').date() >= week_ago]
                 if len(week_data) >= 2:
                     change = week_data[-1]['weight'] - week_data[0]['weight']
-                    report += f"📉 Изменение за неделю: *{'+' if change > 0 else ''}{change:.1f}* кг\n"
+                    report += f"📉 Изменение за неделю: {'+' if change > 0 else ''}{change:.1f} кг\n"
             
             tasks = task_storage.get("tasks", [])
             active_tasks = [t for t in tasks if not t["completed"]]
             done_tasks = [t for t in tasks if t["completed"]]
-            report += f"\n💼 Задачи: *{len(active_tasks)}* активных, *{len(done_tasks)}* выполненных\n"
+            report += f"\n💼 Задачи: {len(active_tasks)} активных, {len(done_tasks)} выполненных\n"
             
-            report += f"\n📌 Напиши *«сегодня»* для полного плана дня\!"
+            report += f"\n📌 Напиши «сегодня» для полного плана дня!"
             
             import telegram
             bot = telegram.Bot(token=TELEGRAM_TOKEN)
-            await bot.send_message(chat_id, escape_markdown(report), parse_mode="MarkdownV2")
+            await bot.send_message(chat_id, report)
         except Exception as e:
             logger.error(f"Ошибка отправки отчёта: {e}")
 
