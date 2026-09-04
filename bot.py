@@ -17,12 +17,6 @@ PROVOD_API_KEY = os.environ.get("PROVOD_API_KEY")
 if not TELEGRAM_TOKEN or not PROVOD_API_KEY:
     raise ValueError("❌ Ошибка: TELEGRAM_TOKEN или PROVOD_API_KEY не найдены!")
 
-# ========== НАСТРОЙКА ПРОКСИ ЧЕРЕЗ ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ ==========
-# Для обхода блокировок Telegram
-os.environ["HTTP_PROXY"] = "socks5://185.244.146.58:1080"
-os.environ["HTTPS_PROXY"] = "socks5://185.244.146.58:1080"
-os.environ["ALL_PROXY"] = "socks5://185.244.146.58:1080"
-
 # ========== ПОДКЛЮЧЕНИЕ К PROVOD.AI ==========
 client = OpenAI(
     api_key=PROVOD_API_KEY,
@@ -398,7 +392,7 @@ def run_scheduler():
 
 # ========== ЗАПУСК ==========
 def main():
-    # Создаём приложение (просто, без лишних параметров)
+    # Создаём приложение (без прокси)
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     
     # Добавляем обработчики
