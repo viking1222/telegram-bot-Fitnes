@@ -9,7 +9,6 @@ from openai import OpenAI
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from storage import Storage
-import httpx
 
 # ========== НАСТРОЙКИ ==========
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
@@ -17,6 +16,12 @@ PROVOD_API_KEY = os.environ.get("PROVOD_API_KEY")
 
 if not TELEGRAM_TOKEN or not PROVOD_API_KEY:
     raise ValueError("❌ Ошибка: TELEGRAM_TOKEN или PROVOD_API_KEY не найдены!")
+
+# ========== НАСТРОЙКА ПРОКСИ ЧЕРЕЗ ПЕРЕМЕННЫЕ ОКРУЖЕНИЯ ==========
+# Для обхода блокировок Telegram
+os.environ["HTTP_PROXY"] = "socks5://185.244.146.58:1080"
+os.environ["HTTPS_PROXY"] = "socks5://185.244.146.58:1080"
+os.environ["ALL_PROXY"] = "socks5://185.244.146.58:1080"
 
 # ========== ПОДКЛЮЧЕНИЕ К PROVOD.AI ==========
 client = OpenAI(
@@ -393,26 +398,16 @@ def run_scheduler():
 
 # ========== ЗАПУСК ==========
 def main():
-    proxy_url = "socks5://185.244.146.58:1080"
+    # Создаём приложение (просто, без лишних параметров)
+    app = Application.builder().token(TELEGRAM_TOKEN).build()
     
-    http_client = httpx.AsyncClient(
-        proxies=proxy_url,
-        timeout=httpx.Timeout(60.0, connect=30.0)
-    )
-    
-    # Правильный синтаксис для версии 21.5
-    app = (
-        Application.builder()
-        .token(TELEGRAM_TOKEN)
-        .http_client(http_client)  # ← ИСПРАВЛЕНО!
-        .build()
-    )
-    
+    # Добавляем обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
+    # Запускаем планировщик
     import schedule
     schedule.every().day.at("09:00").do(lambda: asyncio.run(send_daily_report()))
     
