@@ -332,27 +332,22 @@ async def handle_workout_command(text, update):
 async def handle_message(update: Update, context: ContextTypes.DEFAULT_TYPE):
     text = update.message.text.lower()
     
-    # ВЕС
     if any(word in text for word in ["вес", "кг", "цель"]) and ("записать" in text or "прогресс" in text or "установить" in text):
         await handle_weight_command(text, update)
         return
     
-    # ЗАДАЧИ
     if any(word in text for word in ["задач", "задание"]):
         await handle_task_command(text, update)
         return
     
-    # ЕДА
     if "еда" in text:
         await handle_food_command(text, update)
         return
     
-    # ТРЕНИРОВКИ
     if "трен" in text or "упражн" in text:
         await handle_workout_command(text, update)
         return
     
-    # ЕСЛИ НИЧЕГО НЕ ПОДОШЛО — ОТПРАВЛЯЕМ В AI
     await context.bot.send_chat_action(update.effective_chat.id, action="typing")
     response = get_ai_response(text)
     await update.message.reply_text(escape_markdown(response), parse_mode="MarkdownV2")
@@ -398,26 +393,26 @@ def run_scheduler():
 
 # ========== ЗАПУСК ==========
 def main():
-    # Создаём клиент с прокси для обхода блокировок Telegram
-    # Используем публичный прокси (можно заменить на свой)
     proxy_url = "socks5://185.244.146.58:1080"
     
-    # Создаём HTTP клиент с прокси и увеличенными таймаутами
     http_client = httpx.AsyncClient(
         proxies=proxy_url,
         timeout=httpx.Timeout(60.0, connect=30.0)
     )
     
-    # Создаём приложение с HTTP клиентом
-    app = Application.builder().token(TELEGRAM_TOKEN).http_client(http_client).build()
+    # Правильный синтаксис для версии 21.5
+    app = (
+        Application.builder()
+        .token(TELEGRAM_TOKEN)
+        .http_client(http_client)  # ← ИСПРАВЛЕНО!
+        .build()
+    )
     
-    # Добавляем обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # Запускаем планировщик
     import schedule
     schedule.every().day.at("09:00").do(lambda: asyncio.run(send_daily_report()))
     
