@@ -9,19 +9,14 @@ from openai import OpenAI
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
 from telegram.ext import Application, CommandHandler, MessageHandler, filters, ContextTypes, CallbackQueryHandler
 from storage import Storage
+import httpx
 
-# ========== НАСТРОЙКИ (из переменных окружения) ==========
+# ========== НАСТРОЙКИ ==========
 TELEGRAM_TOKEN = os.environ.get("TELEGRAM_TOKEN")
 PROVOD_API_KEY = os.environ.get("PROVOD_API_KEY")
 
 if not TELEGRAM_TOKEN or not PROVOD_API_KEY:
     raise ValueError("❌ Ошибка: TELEGRAM_TOKEN или PROVOD_API_KEY не найдены!")
-
-# ========== ФУНКЦИЯ ЭКРАНИРОВАНИЯ MARKDOWN ==========
-def escape_markdown(text):
-    """Экранирует специальные символы для MarkdownV2"""
-    special_chars = r'([_*\[\]()~`>#+\-=|{}.!])'
-    return re.sub(special_chars, r'\\\1', text)
 
 # ========== ПОДКЛЮЧЕНИЕ К PROVOD.AI ==========
 client = OpenAI(
@@ -66,6 +61,11 @@ SYSTEM_PROMPT = """Ты — фитнес-помощник. Помогаешь с
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ========== ЭКРАНИРОВАНИЕ MARKDOWN ==========
+def escape_markdown(text):
+    special_chars = r'([_*\[\]()~`>#+\-=|{}.!])'
+    return re.sub(special_chars, r'\\\1', text)
 
 # ========== ФУНКЦИЯ ДЛЯ AI ==========
 def get_ai_response(user_message):
@@ -398,8 +398,18 @@ def run_scheduler():
 
 # ========== ЗАПУСК ==========
 def main():
-    # Создаём приложение
-    app = Application.builder().token(TELEGRAM_TOKEN).build()
+    # Создаём клиент с прокси для обхода блокировок Telegram
+    # Используем публичный прокси (можно заменить на свой)
+    proxy_url = "socks5://185.244.146.58:1080"
+    
+    # Создаём HTTP клиент с прокси и увеличенными таймаутами
+    http_client = httpx.AsyncClient(
+        proxies=proxy_url,
+        timeout=httpx.Timeout(60.0, connect=30.0)
+    )
+    
+    # Создаём приложение с HTTP клиентом
+    app = Application.builder().token(TELEGRAM_TOKEN).http_client(http_client).build()
     
     # Добавляем обработчики
     app.add_handler(CommandHandler("start", start))
