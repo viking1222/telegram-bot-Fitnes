@@ -56,13 +56,15 @@ SYSTEM_PROMPT = """Ты — фитнес-помощник. Помогаешь с
 - Списки: используй дефисы (-) или цифры
 - Разделители: ---
 - Ответ должен быть структурированным, легко читаемым
-- Используй эмодзи умеренно (только для иконок)"""
+- Используй эмодзи умеренно (только для иконок)
+- НЕ используй символы ! . - ( ) [ ] { } + = | * _ # ` ~ > в обычном тексте без экранирования"""
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 # ========== ЭКРАНИРОВАНИЕ MARKDOWN ==========
 def escape_markdown(text):
+    """Экранирует все специальные символы для MarkdownV2"""
     special_chars = r'([_*\[\]()~`>#+\-=|{}.!])'
     return re.sub(special_chars, r'\\\1', text)
 
@@ -97,7 +99,6 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
-    # Убираем parse_mode для этого сообщения, чтобы избежать ошибок
     await update.message.reply_text(
         "👋 Привет! Я твой AI-помощник по фитнесу и работе.\n\n"
         "📌 Нажми на кнопку или напиши команду:",
