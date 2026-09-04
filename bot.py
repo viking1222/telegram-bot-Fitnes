@@ -57,7 +57,7 @@ logger = logging.getLogger(__name__)
 def get_ai_response(user_message):
     try:
         response = client.chat.completions.create(
-            model="openai/gpt-4o-mini",
+            model="zai/glm-5.3-flash",
             messages=[
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": user_message}
