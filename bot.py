@@ -97,11 +97,11 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     ]
     reply_markup = InlineKeyboardMarkup(keyboard)
     
+    # Убираем parse_mode для этого сообщения, чтобы избежать ошибок
     await update.message.reply_text(
         "👋 Привет! Я твой AI-помощник по фитнесу и работе.\n\n"
         "📌 Нажми на кнопку или напиши команду:",
-        reply_markup=reply_markup,
-        parse_mode="MarkdownV2"
+        reply_markup=reply_markup
     )
 
 async def help_command(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -392,16 +392,13 @@ def run_scheduler():
 
 # ========== ЗАПУСК ==========
 def main():
-    # Создаём приложение (без прокси)
     app = Application.builder().token(TELEGRAM_TOKEN).build()
     
-    # Добавляем обработчики
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CommandHandler("help", help_command))
     app.add_handler(CallbackQueryHandler(button_callback))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, handle_message))
     
-    # Запускаем планировщик
     import schedule
     schedule.every().day.at("09:00").do(lambda: asyncio.run(send_daily_report()))
     
